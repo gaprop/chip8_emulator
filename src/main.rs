@@ -1,7 +1,6 @@
 use rand::rngs::ThreadRng;
 use rand::Rng;
-
-enum Action<'a> {
+enum Action<'a> { 
     ClearDisplay,
     DisplayScreen,
     KeyIsPressed(bool),
@@ -9,7 +8,8 @@ enum Action<'a> {
 }
 
 #[allow(non_snake_case)]
-struct Chip8 { v: [u16; 16],
+struct Chip8 { 
+    v: [u16; 16],
     I: u16,
     pc: usize,
     sp: usize,
@@ -38,8 +38,32 @@ impl Chip8 {
         }
     }
 
-    fn font_map(font: u8) -> Font {
+    fn get_font(font: u16) -> [u8; 5] {
+        match font {
+            0x00 => [0xf0, 0x90, 0x90, 0x90, 0xf0],
+            0x01 => [0x20, 0x60, 0x20, 0x20, 0x70],
+            0x02 => [0xf0, 0x10, 0xf0, 0x80, 0xf0],
+            0x03 => [0xf0, 0x10, 0xf0, 0x10, 0xf0],
+            0x04 => [0x90, 0x90, 0xf0, 0x10, 0x10],
+            0x05 => [0xf0, 0x80, 0xf0, 0x10, 0xf0],
+            0x06 => [0xf0, 0x80, 0xf0, 0x90, 0xf0],
+            0x07 => [0xf0, 0x10, 0x20, 0x40, 0x40],
+            0x08 => [0xf0, 0x90, 0xf0, 0x90, 0xf0],
+            0x09 => [0xf0, 0x90, 0xf0, 0x10, 0xf0],
+            0x0a => [0xf0, 0x90, 0xf0, 0x90, 0x90],
+            0x0b => [0xe0, 0x90, 0xe0, 0x90, 0xe0],
+            0x0c => [0xf0, 0x80, 0x80, 0x80, 0xf0],
+            0x0d => [0xe0, 0x90, 0x90, 0x90, 0xe0],
+            0x0e => [0xf0, 0x80, 0xf0, 0x80, 0xf0],
+            n    => panic!("No font of {}", n),
+        }
+    }
 
+    fn get_font_location(&self, x: u16) -> usize {
+        if x > 0x0e {
+            panic!("Not a location for fonts")
+        }
+        (x * 5).into()
     }
 
     fn jump(&mut self, nnn: u16) {
@@ -68,7 +92,7 @@ impl Chip8 {
             },
             0x00ee => { // RET
                 self.pc = self.stack[self.sp];
-                self.sp - 1;
+                self.sp = self.sp.wrapping_sub(1);
                 None
             },
             n if (n & 0xf000) == 0x1000 => { // JP addr
@@ -285,10 +309,47 @@ impl Chip8 {
                 None
             },
             n if (n & 0xf0ff) == 0xf029 => { // LD F, Vx
-                panic!("Implement this...")
+                let x: u16 =  (n & 0x0f00) >> 8;
+                let i = self.get_font_location(x);
+                self.I = i as u16;
+                None
             },
             n if (n & 0xf0ff) == 0xf033 => { // LD B, Vx
+                let x: usize =  ((n & 0x0f00) >> 8).into();
+                let digits= self.v[x].to_string()
+                             .chars()
+                             .map(|d| d.to_digit(10).unwrap())
+                             .collect::<Vec<u8>>();
 
+                for i in (0..(digits.len() * 2)).step_by(2) {
+                    let hi: u8 = (digits[i] & 0xff00) >> 8) as u8;
+                    let lo: u8 = (digits[i] & 0x00ff) as u8
+
+                    self.memory[(self.I as usize) + i]     = hi;
+                    self.memory[(self.I as usize) + i + 1] = lo
+                }
+                None
+            },
+            n if (n & 0xf0ff) == 0xf055 => { // LD [I], Vx
+                let x: usize =  ((n & 0x0f00) >> 8).into();
+                for i in (0..(x * 2)).step_by(2) {
+                    let hi: u8 = (self.v[i] & 0xff00) as u8;
+                    let lo: u8 = (self.v[i] & 0x00ff) as u8;
+
+                    self.memory[(self.I as usize) + i]     = hi;
+                    self.memory[(self.I as usize) + i + 1] = lo
+                }
+                None
+            },
+            n if (n & 0xf0ff) == 0xf065 => { // LD Vx, [I]
+                let x: usize =  ((n & 0x0f00) >> 8).into();
+                for i in (0..(x * 2)).step_by(2) {
+                    let hi: u8 = self.memory[i];
+                    let lo: u8 = self.memory[i + 1];
+
+                    self.v[i] = ((hi << 4) | lo).into()
+                }
+                None
             },
             _ => panic!("Opcode not implemented: {}", op),
         }
