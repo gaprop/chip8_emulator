@@ -271,6 +271,13 @@ impl Chip8 {
                 None
             },
             n if (n & 0xf000) == 0xd000 => { // DRW Vx, Vy, nibble
+                let x: usize = ((n & 0x0f00) >> 8).into();
+                let y: usize = ((n & 0x00f0) >> 8).into();
+                let n: usize = ((n & 0x000f) >> 8).into();
+                let bytes = Vec::with_capacity(n);
+                for i in 0..n {
+                    bytes.push(self.memory[i]);
+                }
                 Some(Action::DisplayScreen)
             },
             n if (n & 0xf0ff) == 0xe09e => { // SKP Vx
@@ -318,15 +325,15 @@ impl Chip8 {
                 let x: usize =  ((n & 0x0f00) >> 8).into();
                 let digits= self.v[x].to_string()
                              .chars()
-                             .map(|d| d.to_digit(10).unwrap())
-                             .collect::<Vec<u8>>();
+                             .map(|d| d.to_digit(10).unwrap() as u16)
+                             .collect::<Vec<u16>>();
 
                 for i in (0..(digits.len() * 2)).step_by(2) {
-                    let hi: u8 = (digits[i] & 0xff00) >> 8) as u8;
-                    let lo: u8 = (digits[i] & 0x00ff) as u8
+                    let hi: u8 = ((digits[i] & 0xff00) >> 8) as u8;
+                    let lo: u8 = (digits[i] & 0x00ff) as u8;
 
                     self.memory[(self.I as usize) + i]     = hi;
-                    self.memory[(self.I as usize) + i + 1] = lo
+                    self.memory[(self.I as usize) + i + 1] = lo;
                 }
                 None
             },
