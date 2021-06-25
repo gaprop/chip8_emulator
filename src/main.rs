@@ -5,11 +5,12 @@ use minifb::{Key, Window, WindowOptions};
 
 use crate::emulator::{Chip8, WIDTH, HEIGHT};
 
-use std::{thread, time};
+use std::{thread, time, env};
 
 fn main() {
     
-    let mut chip8 = Chip8::new("./../rom/PONG");
+    let filename = env::args().nth(1).expect("Needs a file");
+    let mut chip8 = Chip8::new(&filename);
     let mut window = Window::new(
         "Chip8 Interperter",
         WIDTH,
@@ -52,10 +53,10 @@ fn main() {
             .unwrap();
 
         // // thread::sleep(time::Duration::from_millis(500));
-        while window.is_key_down(Key::Space) {
-            window
-                .update_with_buffer(&chip8.screen, WIDTH, HEIGHT)
-                .unwrap();
-        }
+        // while !window.is_key_down(Key::Space) {
+            // window
+                // .update_with_buffer(&chip8.screen, WIDTH, HEIGHT)
+                // .unwrap();
+        // }
     }
 }

@@ -152,11 +152,11 @@ impl Chip8 {
                 self.sp = self.sp.wrapping_sub(1);
                 None
             },
-            // n if (n & 0xf000) == 0x0000 => { // 0nnn - SYS addr
-                // let addr = n & 0x0fff;
-                // self.jump(addr);
-                // None
-            // },
+            n if (n & 0xf000) == 0x0000 => { // 0nnn - SYS addr
+                let addr = n & 0x0fff;
+                self.jump(addr);
+                None
+            },
             n if (n & 0xf000) == 0x1000 => { // JP addr
                 let addr = n & 0x0fff;
                 self.jump(addr);
@@ -180,7 +180,7 @@ impl Chip8 {
             },
             n if (n & 0xf000) == 0x4000 => { // SNE Vx, kk
                 let x: usize =  ((n & 0x0f00) >> 8).into();
-                let kk = ((n & 0x00ff) >> 8) as u8;
+                let kk = (n & 0x00ff) as u8;
                 if self.v[x] != kk {
                     // self.pc += 2;
                     self.pc = self.pc.wrapping_add(2);
@@ -271,7 +271,7 @@ impl Chip8 {
             n if (n & 0xf00f) == 0x8006 => { // SHR Vx{, Vy}
                 let x: usize = ((n & 0x0f00) >> 8).into();
 
-                self.v[0xf] = self.v[0] & 0x01;
+                self.v[0xf] = self.v[x] & 0x01;
 
                 self.v[x] = self.v[x] >> 1; 
                 None
@@ -292,7 +292,7 @@ impl Chip8 {
             n if (n & 0xf00f) == 0x800E => { // SHL Vx{, Vy}
                 let x: usize = ((n & 0x0f00) >> 8).into();
 
-                self.v[0xf] = self.v[x] & 0x80;
+                self.v[0xf] = (self.v[x] & 0x80) >> 7;
                 self.v[x] = self.v[x] << 1; 
                 None
             },
