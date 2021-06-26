@@ -3,9 +3,9 @@ extern crate minifb;
 
 use minifb::{Key, Window, WindowOptions};
 
-use crate::emulator::{Chip8, WIDTH, HEIGHT};
+use crate::emulator::{Chip8, WIDTH, HEIGHT, Event, Action};
 
-use std::{thread, time, env};
+use std::env;
 
 fn main() {
     
@@ -19,44 +19,54 @@ fn main() {
     ).unwrap();
 
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
-
-    // // LD v[0], 0xff
-    // chip8.memory[0x200] = 0x60;
-    // chip8.memory[0x201] = 0xff;
-
-    // // LD v[1], 0x1f
-    // chip8.memory[0x202] = 0x61;
-    // chip8.memory[0x203] = 0x00;
-      
-    // // LD [I], v[0]
-    // chip8.memory[0x204] = 0xf0;
-    // chip8.memory[0x205] = 0x55;
-      
-    // // LD v[0], 0x00
-    // chip8.memory[0x206] = 0x60;
-    // chip8.memory[0x207] = 0x40;
-
-    // // DRW
-    // chip8.memory[0x208] = 0xd0;
-    // chip8.memory[0x209] = 0x11;
-
-    // chip8.emulate_op();
-    // chip8.emulate_op();
-    // chip8.emulate_op();
-    // chip8.emulate_op();
-    // chip8.emulate_op();
     while window.is_open() && !window.is_key_down(Key::Escape) {
-        chip8.emulate_op();
+        let key = window
+            .get_keys()
+            .unwrap_or_else(|| vec![])
+            .pop();
+        let key = to_valid_key(key).map(|k| Event::KeyPress(k));
+        match chip8.emulate_op(key) {
+            Some(Action::DisplayScreen(screen)) => {
+                window
+                    .update_with_buffer(&screen[..], WIDTH, HEIGHT)
+                    .unwrap();
+            },
+            Some(Action::WaitForKeyPress) => {
+                loop {
+                    let key = window.get_keys().unwrap_or_else(|| vec![]).pop();
+                    match to_valid_key(key) {
+                        Some(key) => {
+                            chip8.emulate_op(Some(Event::WaitingKeyPress(key)));
+                            break;
+                        }
+                        _ => window.update(),
+                    }
+                }
+            }
+            _ => (),
+        }
         chip8.decreament_timer();
-        window
-            .update_with_buffer(&chip8.screen, WIDTH, HEIGHT)
-            .unwrap();
+    }
+}
 
-        // // thread::sleep(time::Duration::from_millis(500));
-        // while !window.is_key_down(Key::Space) {
-            // window
-                // .update_with_buffer(&chip8.screen, WIDTH, HEIGHT)
-                // .unwrap();
-        // }
+fn to_valid_key(key: Option<Key>) -> Option<u8> {
+    match key {
+        Some(Key::Key1) => Some(0x1),
+        Some(Key::Key2) => Some(0x2),
+        Some(Key::Key3) => Some(0x3),
+        Some(Key::Key4) => Some(0xc),
+        Some(Key::Q)    => Some(0x4),
+        Some(Key::W)    => Some(0x5),
+        Some(Key::E)    => Some(0x6),
+        Some(Key::R)    => Some(0xd),
+        Some(Key::A)    => Some(0x7),
+        Some(Key::S)    => Some(0x8),
+        Some(Key::D)    => Some(0x9),
+        Some(Key::F)    => Some(0xe),
+        Some(Key::Z)    => Some(0xa),
+        Some(Key::X)    => Some(0x0),
+        Some(Key::C)    => Some(0xb),
+        Some(Key::V)    => Some(0xf),
+        _               => None,
     }
 }

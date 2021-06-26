@@ -24,10 +24,14 @@ pub static FONT_SET: [u8; 80] = [
 
 #[derive(Debug)]
 pub enum Action<'a> { 
-    ClearDisplay,
     DisplayScreen(&'a [u32; WIDTH * HEIGHT]),
-    KeyIsPressed(bool),
-    KeyPress(&'a u8),
+    WaitForKeyPress,
+}
+
+#[derive(Debug)]
+pub enum Event {
+    KeyPress(u8),
+    WaitingKeyPress(u8),
 }
 
 pub const WIDTH: usize = 64;
@@ -35,15 +39,13 @@ pub const HEIGHT: usize = 32;
 
 #[allow(non_snake_case)]
 pub struct Chip8 { 
-    pub screen: [u32; WIDTH * HEIGHT],
+    screen: [u32; WIDTH * HEIGHT],
     v: [u8; 16],
     I: u16,
-    pub pc: usize,
+    pc: usize,
     sp: usize,
-    pub memory: [u8; 0xfff], // 4k memory
+    memory: [u8; 0xfff], // 4k memory
     stack: [usize; 16],
-    // keyboard: u16,
-    // display: [u8; 64 * 32]
     DT: u8, 
     ST: u8, 
     rng: ThreadRng,
@@ -65,51 +67,11 @@ impl Chip8 {
             sp: 0,
             memory: memory,
             stack: [0; 16],
-            // keyboard: 0,
             DT: 0,
             ST: 0,
             rng: rand::thread_rng(),
         }
     }
-
-    // pub fn new() -> Self {
-        // Chip8 {
-            // screen: [0; WIDTH * HEIGHT],
-            // v: [0; 16],
-            // I: 0,
-            // pc: 0x200, Programs start at 0x200 (512)
-            // sp: 0,
-            // memory: [0; 0xfff],
-            // stack: [0; 16],
-            // keyboard: 0,
-            // DT: 0,
-            // ST: 0,
-            // rng: rand::thread_rng(),
-        // }
-    // }
-
-    // FIXME: Make a different function or something
-    // pub fn get_font(font: u16) -> [u8; 5] {
-        // match font {
-            // 0x00 => [0xf0, 0x90, 0x90, 0x90, 0xf0],
-            // 0x01 => [0x20, 0x60, 0x20, 0x20, 0x70],
-            // 0x02 => [0xf0, 0x10, 0xf0, 0x80, 0xf0],
-            // 0x03 => [0xf0, 0x10, 0xf0, 0x10, 0xf0],
-            // 0x04 => [0x90, 0x90, 0xf0, 0x10, 0x10],
-            // 0x05 => [0xf0, 0x80, 0xf0, 0x10, 0xf0],
-            // 0x06 => [0xf0, 0x80, 0xf0, 0x90, 0xf0],
-            // 0x07 => [0xf0, 0x10, 0x20, 0x40, 0x40],
-            // 0x08 => [0xf0, 0x90, 0xf0, 0x90, 0xf0],
-            // 0x09 => [0xf0, 0x90, 0xf0, 0x10, 0xf0],
-            // 0x0a => [0xf0, 0x90, 0xf0, 0x90, 0x90],
-            // 0x0b => [0xe0, 0x90, 0xe0, 0x90, 0xe0],
-            // 0x0c => [0xf0, 0x80, 0x80, 0x80, 0xf0],
-            // 0x0d => [0xe0, 0x90, 0x90, 0x90, 0xe0],
-            // 0x0e => [0xf0, 0x80, 0xf0, 0x80, 0xf0],
-            // 0x0f => [0xf0, 0x80, 0xf0, 0x80, 0x80],
-            // n    => panic!("No font of {}", n),
-        // }
-    // }
 
     fn get_font_location(&self, x: usize) -> usize {
         if x > 0x0f {
@@ -136,16 +98,18 @@ impl Chip8 {
         self.DT = self.DT.wrapping_sub(1);
     }
 
-    pub fn emulate_op(&mut self) -> Option<Action> {
+    pub fn emulate_op(&mut self, event: Option<Event>) -> Option<Action> {
         let hi = self.memory[self.pc];
         let lo = self.memory[self.pc.wrapping_add(1)];
         let op: u16 = ((hi as u16) << 8) | (lo as u16);
-        println!("{:#05x}", op);
-        // self.pc += 2;
-        self.pc = self.pc.wrapping_add(2);
+        match event {
+            Some(Event::WaitingKeyPress(_)) => (),
+            _ => self.pc = self.pc.wrapping_add(2),
+        }
         match op {
             0x00e0 => { // CLS
-                Some(Action::ClearDisplay)
+                self.screen = [0; WIDTH * HEIGHT];
+                Some(Action::DisplayScreen(&self.screen))
             },
             0x00ee => { // RET
                 self.pc = self.stack[self.sp];
@@ -173,7 +137,6 @@ impl Chip8 {
                 let x: usize = ((n & 0x0f00) >> 8).into();
                 let kk = (n & 0x00ff) as u8;
                 if self.v[x] == kk {
-                    // self.pc += 2;
                     self.pc = self.pc.wrapping_add(2);
                 }
                 None
@@ -182,7 +145,6 @@ impl Chip8 {
                 let x: usize =  ((n & 0x0f00) >> 8).into();
                 let kk = (n & 0x00ff) as u8;
                 if self.v[x] != kk {
-                    // self.pc += 2;
                     self.pc = self.pc.wrapping_add(2);
                 }
                 None
@@ -241,7 +203,6 @@ impl Chip8 {
                 let x: usize = ((n & 0x0f00) >> 8).into();
                 let y: usize = ((n & 0x00f0) >> 4).into();
 
-                // let byte = self.v[x] + self.v[y];
                 let vx: u16 = self.v[x].into();
                 let vy: u16 = self.v[y].into();
 
@@ -300,7 +261,6 @@ impl Chip8 {
                 let x: usize =  ((n & 0x0f00) >> 8).into();
                 let y: usize = ((n & 0x00f0) >> 4).into();
                 if self.v[x] != self.v[y] {
-                    // self.pc += 2;
                     self.pc = self.pc.wrapping_add(2);
                 }
                 None
@@ -334,8 +294,6 @@ impl Chip8 {
                     let byte: u8 = self.memory[self.I as usize + i];
                     for j in 0..8 {
                         let bit: u32 = (byte.wrapping_shr(7 - j as u32) & 0x1).into();
-                        // println!("{}", self.get_screen_pos((self.v[x] as usize) + j, (self.v[y] as usize) + i));
-                        // println!("{:#05x}", bit);
                         let pixel = self.screen[self.get_screen_pos((self.v[x] as usize) + j, (self.v[y] as usize) + i)];
                         let new_pixel = (pixel & 0x01) ^ bit;
                         if new_pixel == (pixel & 0x01) { 
@@ -354,24 +312,37 @@ impl Chip8 {
                 Some(Action::DisplayScreen(&self.screen))
             },
             n if (n & 0xf0ff) == 0xe09e => { // SKP Vx
-                Some(Action::KeyIsPressed(true))
+                let x: usize = ((n & 0x0f00) >> 8).into();
+                match event {
+                    Some(Event::KeyPress(n)) if self.v[x] == n => {
+                        self.pc = self.pc.wrapping_add(2);
+                    },
+                    _ => (),
+                }
+                None
             },
             n if (n & 0xf0ff) == 0xe0a1 => { // SKNP Vx
-                Some(Action::KeyIsPressed(false))
+                let x: usize = ((n & 0x0f00) >> 8).into();
+                match event {
+                    Some(Event::KeyPress(n)) if self.v[x] == n => (),
+                    _ => self.pc = self.pc.wrapping_add(2),
+                }
+                None
             },
             n if (n & 0xf0ff) == 0xf007 => { // LD Vx, DT
                 let x: usize =  ((n & 0x0f00) >> 8).into();
                 self.v[x] = self.DT;
                 None
             },
-            // n if (n & 0xf0ff) == 0xf007 => { // LD Vx, DT
-                // let x: usize =  ((n & 0x0f00) >> 8).into();
-                // self.v[x] = self.DT;
-                // None
-            // },
             n if (n & 0xf0ff) == 0xf00A => { // LD Vx, K
                 let x: usize =  ((n & 0x0f00) >> 8).into();
-                Some(Action::KeyPress(&self.v[x]))
+                match event {
+                    Some(Event::WaitingKeyPress(n)) => {
+                        self.v[x] = n;
+                        None
+                    }
+                    _ => Some(Action::WaitForKeyPress)
+                }
             },
             n if (n & 0xf0ff) == 0xf015 => { // LD DT, Vx 
                 let x: usize =  ((n & 0x0f00) >> 8).into();
@@ -399,19 +370,6 @@ impl Chip8 {
                 self.memory[self.I as usize]     = self.v[x] / 100;
                 self.memory[self.I as usize + 1] = (self.v[x] / 10) % 10;
                 self.memory[self.I as usize + 2] = (self.v[x] % 100) % 10;
-                // let digits= self.v[x].to_string()
-                             // .chars()
-                             // .map(|d| d.to_digit(10).unwrap() as u8)
-                             // .collect::<Vec<u8>>();
-
-                // for i in 0..digits.len() {
-                    // self.memory[(self.I as usize) + i] = digits[i];
-                    // // let hi: u8 = ((digits[i] & 0xff00) >> 8) as u8;
-                    // // let lo: u8 = (digits[i] & 0x00ff) as u8;
-
-                    // // self.memory[(self.I as usize) + (i * 2)]     = hi;
-                    // // self.memory[(self.I as usize) + (i * 2) + 1] = lo;
-                // }
                 None
             },
             n if (n & 0xf0ff) == 0xf055 => { // LD [I], Vx
